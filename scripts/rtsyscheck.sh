@@ -17,7 +17,7 @@ print_result(){
     if [ -n "$1" ]; then
         local answer
         answer=$(get_return_message $1)
-        echo -e "\e[1A\r[$text"
+        echo -e "\e[1A\r[ $answer"
     fi
 }
 
@@ -64,3 +64,84 @@ get_return_message(){
     fi
     echo $answer
 }
+
+
+# Utility Functions definitions
+
+# get_config_cmd: generates the command needed to open the kernel config file
+# (and removes all the comment line)
+get_config_cmd(){
+    if [ $(echo $config_path | grep "\w*.gz$") ]; then
+        config_cmd="zcat $config_path"
+    else
+        config_cmd="cat $config_path"
+    fi
+    config_cmd="$config_cmd | grep -v '^#'"
+}
+
+
+# Core function definitions
+
+# find_config: returns the path to the kernel confi file
+# Will return an empty string should it fail
+find_config(){
+    print_line "Checking config.gz presence"
+    if [ -e /proc/config.gz ]; then
+        config_path="/proc/config.gz"
+        print_result 0
+    elif [ -e /boot/config ]; then
+        config_path="/boot/config"
+        print_result 0
+    elif [ -e "/boot/config-$(uname -r)" ]; then
+        config_path="/boot/config-$(uname -r)"
+        print_result 0
+    else
+        if [ -n $(find /lib/modules/$(uname -r) -type f \( -name "config.ko" -o \
+                -name "config.o" \) 2>/dev/null ) ]; then
+            # If we arrive here there is a config.ko or config.o file in the modules directory
+            print_result 1
+            echo -ne "We have detected the \e[1mconfig\e[0m module, would you like to load it with sudo? [y/N/use (s)u instead] "
+            read answer
+            case "$answer" in
+                [yY][eE][sS]|[yY])
+                    sudo modprobe config 2>/dev/null
+                    if [ "$?" -eq 0 ]; then
+                        print_line "Rechecking config presence"
+                        if [ -e /proca/config.gz ]; then
+                            config_path="/proc/config.gz"
+                            print_result 0
+                        else
+                            print_result 2
+                        fi
+                    fi
+                    ;;
+                su|s)
+                    su -c "modprobe config" 2>/dev/null
+                    if [ "$?" -eq 0 ]; then
+                        print_line "Rechecking config presence"
+                        if [ -e /proc/config.gz ]; then
+                            config_path="/proc/config.gz"
+                            print_result 0
+                        else
+                            print_result 2
+                        fi
+                    fi
+                    ;;
+            esac
+        else
+            print_result 2
+        fi
+    fi
+}
+
+
+# Main
+
+find_config
+
+if [ -n "$config_path" ]; then
+    echo "Using config from $config_path"
+    get_config_cmd
+else
+    echo "config not found, skipping kernel compilation flags checks"
+fi
