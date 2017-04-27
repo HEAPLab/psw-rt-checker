@@ -37,7 +37,13 @@ print_lineresult(){
 # Prints a line with ERROR prepended in red
 print_error(){
     if [ -n "$1" ]; then
-        >2& echo -e "\e[91mError\e[0m: $1"
+        >&2 echo -e "\e[91mError\e[0m: $1"
+    fi
+}
+
+print_notice(){
+    if [ -n "$1" ]; then
+        echo -e "\e[34mNotice\e[0m: $1"
     fi
 }
 
@@ -60,7 +66,7 @@ get_return_message(){
         answer="\e[91m\e[1mWARN\e[0m"
     elif [ $1 -eq '255' ]; then
         #The item was not present
-        answer="\e[91m\e[1m NP \e[0m"
+        answer="\e[91m\e[1mNPRS\e[0m"
     fi
     echo $answer
 }
