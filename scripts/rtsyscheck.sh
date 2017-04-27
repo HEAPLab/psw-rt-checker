@@ -196,6 +196,41 @@ find_config(){
     fi
 }
 
+# check_config_vars: checks the kernel config for proper settings
+check_config_vars(){
+    echo "Checking for RT Preemption"
+    check_variable_result "Checking if CONFIG_PREEMPT_RT_FULL is enabled" "CONFIG_PREEMPT_RT_FULL" 0 2
+    check_variable_result "Checking if CONFIG_PREEMPT_RTB is disabled" "CONFIG_PREEMPT_RTB" 1 0
+    check_variable_result "Checking if CONFIG_PREEMPT__LL is disabled" "CONFIG_PREEMPT__LL" 1 0
+    check_variable_result "Checking if CONFIG_PREEMPT_VOLUNTARY is disabled" "CONFIG_PREEMPT_VOLUNTARY" 1 0
+    check_variable_result "Checking if CONFIG_PREEMPT is disabled" "CONFIG_PREEMPT" 1 0
+    check_variable_result "Checking if CONFIG_PREEMPT_NONE is disabled" "CONFIG_PREEMPT_NONE" 2 0
+    if [ $? -eq 0 ]; then
+        print_error "Non preemptible kernel"
+    fi
+    echo "Checking Interrupts"
+    check_variable_result "Checking if CONFIG_GENERIC_IRQ_MIGRATION is enabled" "CONFIG_GENERIC_IRQ_MIGRATION" 0 1
+    check_variable_result "Checking if CONFIG_IRQ_FORCED_THREADING is enabled" "CONFIG_IRQ_FORCED_THREADING"  0 2
+    echo "Checking Tick Subsystem"
+    check_variable_result "Checking if CONFIG_HZ_PERIODIC is disabled" "CONFIG_HZ_PERIODIC" 2 0
+    check_variable_result "Checking if CONFIG_NO_HZ_IDLE is disabled" "CONFIG_HZ_IDLE" 1 0
+    check_variable_result "Checking if CONFIG_NO_HZ_FULL is enabled" "CONFIG_HZ_FULL" 0 1
+    check_variable "CONFIG_HZ_FULL_ALL"
+    if [ $? -eq 0 ]; then
+        print_notice "CONFIG_HZ_FULL_ALL is enabled"
+    fi
+    print_notice "CONFIG_HZ has value $(get_variable_var "CONFIG_HZ")"
+    echo "Checking RCU Subsystem"
+    check_variable_result "Checking if CONFIG_RCU_NOCB_CPU is enabled" "CONFIG_RCU_NOCB_CPU" 0 2
+    check_variable_result "Checking if CONFIG_RCU_NOCB_CPU_NONE is disabled" "CONFIG_RCU_NOCB_CPU_NONE" 2 0
+    check_variable_result "Checking if CONFIG_RCU_NOCB_CPU_ALL is enabled" "CONFIG_RCU_NOCB_CPU_ALL" 0 1
+    check_variable_result "Checking if CONFIG_PREEMPT_RCU is enabled" "CONFIG_PREEMPT_RCU" 0 1
+    echo "Checking Other configs"
+    check_variable_result "Checking if CONFIG_HOTPLUG_CPU is enabled" "CONFIG_HOTPLUG_CPU" 0 1
+    check_variable_result "Checking if CONFIG_HIGH_RES_TIMERS is enabled" "CONFIG_HIGH_RES_TIMERS" 0 2
+    check_variable_result "Checking if CONFIG_PREEMPT_NOTIFIERS is enabled" "CONFIG_PREEMPT_NOTIFIERS" 0 2
+}
+
 
 # Main
 
@@ -204,6 +239,7 @@ find_config
 if [ -n "$config_path" ]; then
     echo "Using config from $config_path"
     get_config_cmd
+    check_config_vars
 else
     echo "config not found, skipping kernel compilation flags checks"
 fi
