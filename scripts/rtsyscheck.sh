@@ -74,6 +74,63 @@ get_return_message(){
 
 # Utility Functions definitions
 
+# check_variable_result: checks if the config variable is enabled
+# if the variable is not present it is treated as not enabled
+# $1: String to print
+# $2: name of the config variable (prints nothing if empty)
+# $3: result to print out if true
+# $4: result to print out if false
+# In case the variable is not found it will report as such
+check_variable_result(){
+    if [ -n "$1" ]; then
+        local result_code
+        local _rc
+        if check_variable "$2"; then
+            result_code=$3
+            _rc=0
+        else
+            result_code=$4
+            _rc=1
+        fi
+        print_lineresult "$1" $result_code
+        return $_rc
+    fi
+}
+
+# check_variable: returns 0 if the variable is set to y
+# 1 otherwisei
+# $1: name of the config variable
+check_variable(){
+    if [ -n "$1" ]; then
+        config_val=$(get_variable_var "$1")
+        if [ $? -eq 1 ]; then
+            return 255
+        fi
+        if [ "$config_val" = "y" ]; then
+            return 0
+        else
+            return 1
+        fi
+    else
+        return 255
+    fi
+}
+
+# get_variable_var: echoes the value for the specified kernel variable
+# returns 1 if the variable is not present in the config
+# $1: the name of the kernel variable
+get_variable_var(){
+    local config_line
+    config_line=$(grep -e "$1=" <<< """$($config_cmd)""")
+    if [ $? -eq 0 ]; then
+        local config_params
+        config_params=($( echo $config_line | tr '=' ' ' ))
+        echo ${config_params[1]}
+    else
+        return 1
+    fi
+}
+
 # get_config_cmd: generates the command needed to open the kernel config file
 # (and removes all the comment line)
 get_config_cmd(){
@@ -82,7 +139,6 @@ get_config_cmd(){
     else
         config_cmd="cat $config_path"
     fi
-    config_cmd="$config_cmd | grep -v '^#'"
 }
 
 
