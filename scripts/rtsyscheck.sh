@@ -141,6 +141,42 @@ get_config_cmd(){
     fi
 }
 
+# check_cmdline_result: checks if the specified string is in /proc/cmdline
+# and prints the result
+# $1: string to check
+# $2: message to print
+# $3: result if string is present
+# $4: result if string is absent
+check_cmdline_result(){
+    if [ -n "$1" ]; then
+        local rescode
+        if check_cmdline "$1"; then
+            rescode=$3
+        else
+            rescode=$4
+        fi
+        print_lineresult "$2" $rescode
+    fi
+}
+
+# check_cmdline: checks if string is in /proc/cmdline
+# returns 0 if the string is found, otherwise 1
+# $1: string to check
+check_cmdline(){
+    if grep "$1" /proc/cmdline > /dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# get_cmdline_var: gets the value of the specified parameter in the commandline
+# $1: variable to get
+get_cmdline_var(){
+    if [ -n "$1" ]; then
+        echo $(cat /proc/cmdline | tr ' ' '\n' | grep "$1")
+    fi
+}
 
 # Core function definitions
 
@@ -231,6 +267,29 @@ check_config_vars(){
     check_variable_result "Checking if CONFIG_PREEMPT_NOTIFIERS is enabled" "CONFIG_PREEMPT_NOTIFIERS" 0 2
 }
 
+check_cmd_line(){
+    echo "Checking kernel command-line parameters"
+    check_cmdline_result "quiet" "Checking for quiet boot" 0 1
+    if check_cmdline "isolcpus"; then
+        print_notice "$(get_cmdline_var "isolcpus")"
+    else
+        print_lineresult "isolcpu not specified in the kernel command parameters" 1
+    fi
+    if check_cmdline "nohz_full"; then
+        print_notice "$(get_cmdline_var "nohz_full")"
+    else
+        if ! check_variable "CONFIG_NO_HZ_FULL"; then
+            print_lineresult "nohz_full not present and NO_HZ_FULL disabled" 1
+        fi
+    fi
+    if check_cmdline "rcu_nocbs"; then
+        print_notice "$(get_cmdline_var "rcu_nocbs")"
+    else
+        if ! check_variable "CONFIG_RCU_NOCB_CPU_ALL"; then
+            print_lineresult "rcu_nocbs not present and RCU_NOCB_CPU_ALL disabled" 1
+        fi
+    fi
+}
 
 # Main
 
@@ -240,6 +299,7 @@ if [ -n "$config_path" ]; then
     echo "Using config from $config_path"
     get_config_cmd
     check_config_vars
+    check_cmd_line
 else
     echo "config not found, skipping kernel compilation flags checks"
 fi
