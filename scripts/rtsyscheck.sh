@@ -291,6 +291,23 @@ check_cmd_line(){
     fi
 }
 
+parse_isolcpus(){
+    local isollist
+    local range
+    IFS="," read -a isollist <<< """$(cat /sys/devices/system/cpu/isolated)"""
+    isolcpus_list=()
+    for elem in "${isollist[@]}"; do
+        if grep '-' <<< """$elem"""; then
+            IFS="-" read -a range <<< """$elem"""
+            range=( $(seq ${range[0]} ${range[1]}))
+            isolcpus_list=( ${isolcpus_list[@]} ${range[@]} )
+        else
+            isolcpus_list=( ${isolcpus_list[@]} $elem )
+        fi
+    done
+}
+
+
 # Main
 
 find_config
@@ -300,6 +317,7 @@ if [ -n "$config_path" ]; then
     get_config_cmd
     check_config_vars
     check_cmd_line
+    parse_isolcpus
 else
     echo "config not found, skipping kernel compilation flags checks"
 fi
