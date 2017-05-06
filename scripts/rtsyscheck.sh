@@ -37,13 +37,13 @@ print_lineresult(){
 # Prints a line with ERROR prepended in red
 print_error(){
     if [ -n "$1" ]; then
-        >&2 echo -e "\e[91mError\e[0m: $1"
+        >&2 echo -e "\e[91m\e[1mError\e[0m: $1"
     fi
 }
 
 print_notice(){
     if [ -n "$1" ]; then
-        echo -e "\e[34mNotice\e[0m: $1"
+        echo -e "\e[96m\e[1mNotice\e[0m: $1"
     fi
 }
 
@@ -69,6 +69,12 @@ get_return_message(){
         answer="\e[91m\e[1mNPRS\e[0m"
     fi
     echo $answer
+}
+
+# print_section_title: prints the section header
+# $1: message to print
+print_section_title(){
+    echo -e "\e[1m~~~ $1 ~~~\e[0m"
 }
 
 
@@ -178,12 +184,13 @@ get_cmdline_var(){
     fi
 }
 
+
 # Core function definitions
 
 # find_config: returns the path to the kernel confi file
 # Will return an empty string should it fail
 find_config(){
-    print_line "Checking config.gz presence"
+    print_line "Checking config presence"
     if [ -e /proc/config.gz ]; then
         config_path="/proc/config.gz"
         print_result 0
@@ -234,7 +241,7 @@ find_config(){
 
 # check_config_vars: checks the kernel config for proper settings
 check_config_vars(){
-    echo "Checking for RT Preemption"
+    print_section_title "Checking for RT Preemption"
     check_variable_result "Checking if CONFIG_PREEMPT_RT_FULL is enabled" "CONFIG_PREEMPT_RT_FULL" 0 2
     check_variable_result "Checking if CONFIG_PREEMPT_RTB is disabled" "CONFIG_PREEMPT_RTB" 1 0
     check_variable_result "Checking if CONFIG_PREEMPT__LL is disabled" "CONFIG_PREEMPT__LL" 1 0
@@ -244,10 +251,10 @@ check_config_vars(){
     if [ $? -eq 0 ]; then
         print_error "Non preemptible kernel"
     fi
-    echo "Checking Interrupts"
+    print_section_title "Checking Interrupts"
     check_variable_result "Checking if CONFIG_GENERIC_IRQ_MIGRATION is enabled" "CONFIG_GENERIC_IRQ_MIGRATION" 0 1
     check_variable_result "Checking if CONFIG_IRQ_FORCED_THREADING is enabled" "CONFIG_IRQ_FORCED_THREADING"  0 2
-    echo "Checking Tick Subsystem"
+    print_section_title "Checking Tick Subsystem"
     check_variable_result "Checking if CONFIG_HZ_PERIODIC is disabled" "CONFIG_HZ_PERIODIC" 2 0
     check_variable_result "Checking if CONFIG_NO_HZ_IDLE is disabled" "CONFIG_HZ_IDLE" 1 0
     check_variable_result "Checking if CONFIG_NO_HZ_FULL is enabled" "CONFIG_HZ_FULL" 0 1
@@ -256,19 +263,19 @@ check_config_vars(){
         print_notice "CONFIG_HZ_FULL_ALL is enabled"
     fi
     print_notice "CONFIG_HZ has value $(get_variable_var "CONFIG_HZ")"
-    echo "Checking RCU Subsystem"
+    print_section_title "Checking RCU Subsystem"
     check_variable_result "Checking if CONFIG_RCU_NOCB_CPU is enabled" "CONFIG_RCU_NOCB_CPU" 0 2
     check_variable_result "Checking if CONFIG_RCU_NOCB_CPU_NONE is disabled" "CONFIG_RCU_NOCB_CPU_NONE" 2 0
     check_variable_result "Checking if CONFIG_RCU_NOCB_CPU_ALL is enabled" "CONFIG_RCU_NOCB_CPU_ALL" 0 1
     check_variable_result "Checking if CONFIG_PREEMPT_RCU is enabled" "CONFIG_PREEMPT_RCU" 0 1
-    echo "Checking Other configs"
+    print_section_title "Checking Other configs"
     check_variable_result "Checking if CONFIG_HOTPLUG_CPU is enabled" "CONFIG_HOTPLUG_CPU" 0 1
     check_variable_result "Checking if CONFIG_HIGH_RES_TIMERS is enabled" "CONFIG_HIGH_RES_TIMERS" 0 2
     check_variable_result "Checking if CONFIG_PREEMPT_NOTIFIERS is enabled" "CONFIG_PREEMPT_NOTIFIERS" 0 2
 }
 
 check_cmd_line(){
-    echo "Checking kernel command-line parameters"
+    print_section_title "Checking kernel command-line parameters"
     check_cmdline_result "quiet" "Checking for quiet boot" 0 1
     if check_cmdline "isolcpus"; then
         print_notice "$(get_cmdline_var "isolcpus")"
