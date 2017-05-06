@@ -187,8 +187,10 @@ get_cmdline_var(){
 
 # Core function definitions
 
-# find_config: returns the path to the kernel confi file
+# find_config: returns the path to the kernel config file
 # Will return an empty string should it fail
+# It searches on the usual kernel config localtions and if it fails tries
+# to check if the "config" module is present and ask the user if it can load it
 find_config(){
     print_line "Checking config presence"
     if [ -e /proc/config.gz ]; then
@@ -298,6 +300,8 @@ check_cmd_line(){
     fi
 }
 
+# parse_isolcpus: parses the isolcpus list (through /sys/devices/system/cpu/isolated)
+# and expands ranges. Saves the expanded array into $isolcpus_list.
 parse_isolcpus(){
     local isollist
     local range
@@ -323,8 +327,9 @@ if [ -n "$config_path" ]; then
     echo "Using config from $config_path"
     get_config_cmd
     check_config_vars
-    check_cmd_line
-    parse_isolcpus
 else
     echo "config not found, skipping kernel compilation flags checks"
 fi
+check_cmd_line
+parse_isolcpus
+uname_check
