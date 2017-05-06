@@ -21,9 +21,10 @@ print_result(){
     fi
 }
 
-# print_lresult: combines the previous two functions in one
+# print_lineresult: combines the functionality of the previous
+# two functions in one
 # $1: the line to be printed
-# $2: the result number to use (check print_result for codes)
+# $2: the result code to use (check get_return_message for codes)
 print_lineresult(){
     if [ -n "$2" ]; then
         local answer
@@ -32,6 +33,15 @@ print_lineresult(){
     if [ -n "$1" ]; then
         echo -e "[ $answer ] $1"
     fi
+}
+
+# print_lineresult_error: prints result line and an error line
+# $1: Message to be displayed in the result line
+# $2: result code to use
+# $3: error message to display
+print_lineresult_error(){
+    print_lineresult "$1" $2
+    print_error "$3"
 }
 
 # Prints a line with ERROR prepended in red
@@ -184,6 +194,53 @@ get_cmdline_var(){
     fi
 }
 
+# parse_cr_list: Parses a comma-range list, echos the resulting array
+# $1: the string to parse
+parse_cr_list(){
+    local list
+    local range
+    local final_list
+    IFS="," read -a list <<< """$1"""
+    final_list=()
+    for elem in "${list[@]}"; do
+        if grep '-' <<< """$elem""" > /dev/null; then
+            IFS="-" read -a range <<< """$elem"""
+            range=( $(seq ${range[0]} ${range[1]}))
+            final_list=( ${final_list[@]} ${range[@]} )
+        else
+            final_list=( ${final_list[@]} $elem )
+        fi
+    done
+    echo ${final_list[@]}
+}
+
+# get_file_value: gets the contents of a file and echoes them, returns 1 if
+# the file was not found
+# $1: filepath to check
+get_file_value(){
+    if [ -e "$1" ]; then
+        cat "$1"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# array_diff: returns an array with only the elements that are present
+# in the first array
+# $1: first array
+# $2: second array
+arrray_diff(){
+    comm -23 <(echo "$1" | tr ' ' '\n' | sort) <(echo "$2" | tr ' ' '\n' | sort) | tr '\n' ' '
+}
+
+# array_same: returns an array with only the elements that are shared
+# $1: first array
+# $2: second array
+array_same(){
+    comm -12 <(echo "$1" | tr ' ' '\n' | sort) <(echo "$2" | tr ' ' '\n' | sort) | tr '\n' ' '
+}
+
 
 # Core function definitions
 
@@ -303,19 +360,7 @@ check_cmd_line(){
 # parse_isolcpus: parses the isolcpus list (through /sys/devices/system/cpu/isolated)
 # and expands ranges. Saves the expanded array into $isolcpus_list.
 parse_isolcpus(){
-    local isollist
-    local range
-    IFS="," read -a isollist <<< """$(cat /sys/devices/system/cpu/isolated)"""
-    isolcpus_list=()
-    for elem in "${isollist[@]}"; do
-        if grep '-' <<< """$elem"""; then
-            IFS="-" read -a range <<< """$elem"""
-            range=( $(seq ${range[0]} ${range[1]}))
-            isolcpus_list=( ${isolcpus_list[@]} ${range[@]} )
-        else
-            isolcpus_list=( ${isolcpus_list[@]} $elem )
-        fi
-    done
+    isolcpus_list=$(parse_cr_list "$(cat /sys/devices/system/cpu/isolated)" )
 }
 
 uname_check(){
