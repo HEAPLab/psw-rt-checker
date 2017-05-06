@@ -318,6 +318,25 @@ parse_isolcpus(){
     done
 }
 
+uname_check(){
+    print_section_title "Checking if uname -a is proper"
+    local check_msg
+    check_msg="Checking PREEMPT in uname"
+    grep 'PREEMPT' <<< """$(uname -a)""" > /dev/null
+    if [ $? -eq 0 ]; then
+        print_lineresult "$check_msg" 0
+    else
+        print_lineresult "$check_msg" 2
+    fi
+    check_msg="Checking 'PREEMPT RT' in uname"
+    grep 'PREEMPT RT' <<< """$(uname -a)""" > /dev/null
+    if [ $? -eq 0 ]; then
+        print_lineresult "$check_msg" 0
+    else
+        print_lineresult "$check_msg" 1
+    fi
+}
+
 
 # Main
 
