@@ -230,7 +230,7 @@ get_file_value(){
 # in the first array
 # $1: first array
 # $2: second array
-arrray_diff(){
+array_diff(){
     comm -23 <(echo "$1" | tr ' ' '\n' | sort) <(echo "$2" | tr ' ' '\n' | sort) | tr '\n' ' '
 }
 
@@ -382,6 +382,139 @@ uname_check(){
     fi
 }
 
+procsys_check(){
+    print_section_title "Checking Watchdog Presence"
+    local f_val
+    local check_msg
+    check_msg="Checking if watchdog is disabled"
+    f_val=$(get_file_value "/proc/sys/kernel/watchdog")
+    if [ $? -eq 0 ] && [ $f_val = "1" ]; then
+        print_lineresult "$check_msg" 1
+        local watchdog_list
+        local intersection_list
+        watchdog_list=( $(parse_cr_list "$(cat /proc/sys/kernel/watchdog_cpumask)") )
+        intersection_list=( $(array_same "${isolcpus_list[*]}" "${watchdog_list[*]}") )
+        if [ -n "$intersection_list" ]; then
+            print_lineresult "Watchdog is present on cpus $( echo "${intersection_list[*]}" | tr ' ' ',' )" 2
+        fi
+    else
+        print_lineresult "$check_msg" 0
+    fi
+
+
+    print_section_title "Performing sysfs checks"
+    check_msg="Checking if Ftrace is disabled"
+    f_val=$(get_file_value "/proc/sys/kernel/ftrace_enabled")
+    if [ $? -eq 0 ] && [ $f_val = "1" ]; then
+        print_lineresult_error "$check_msg" 1 "Ftrace may introduce extra latencies"
+    else
+        print_lineresult "$check_msg" 0
+    fi
+    check_msg="Checking if NMI watchdog is disabled"
+    f_val=$(get_file_value "/proc/sys/kernel/nmi_watchdog")
+    if [ $? -eq 0 ] && [ $f_val = "1" ]; then
+        print_lineresult_error "$check_msg" 1 "NMI watchdog is enabled and may introduce periodic extra latencies"
+    else
+        print_lineresult "$check_msg" 0
+    fi
+    check_msg="Checking printk level"
+    f_val=( $(get_file_value "/proc/sys/kernel/printk") )
+    if [ $? -eq 0 ] && [ "${f_val[1]}" -gt 4 ]; then
+        print_lineresult_error "$check_msg" 1 "Print debugging level is too verbose"
+    else
+        print_lineresult "$check_msg" 0
+    fi
+    check_msg="Checking vmstat interval"
+    f_val=$(get_file_value "/proc/sys/vm/stat_interval")
+    if [ $? -eq 0 ] && [ "$f_val" -le 60 ]; then
+        print_lineresult_error "$check_msg" 1 "vmstat interval seems too low"
+    else
+        print_lineresult "$check_msg" 0
+    fi
+
+
+    print_section_title "Checking RT timings"
+    local period period_present
+    local runtime runtime_present
+    local percentage
+    period=$(get_file_value "/proc/sys/kernel/sched_rt_period_us")
+    period_present="$?"
+    runtime=$(get_file_value "/proc/sys/kernel/sched_rt_runtime_us")
+    runtime_present="$?"
+    if [ $period_present -eq 0 ] && [ $runtime_present -eq 0 ]; then
+        check_msg="Checking runtime share %"
+        percentage=$(bc <<< """scale=2; $runtime/$period""")
+        if [ $(bc <<< """$percentage<=50""") -eq 0 ]; then
+            print_lineresult_error "$check_msg" 1 "Runtime allocated to real-time tasks seems too low"
+        else
+            print_lineresult "$check_msg" 0
+        fi
+    fi
+    if [ $runtime_present -eq 0 ] && [ $runtime -eq 0 ]; then
+        print_error "Real-time tasks have no time to execute"
+    fi
+    print_notice "RT timings value"
+    if [ $period_present -eq 0 ]; then
+        echo "sched_rt_period_us: $period"
+    fi
+    if [ $runtime_present -eq 0 ]; then
+        echo "sched_rt_runtime_us: $runtime"
+    fi
+    f_val=$(get_file_value "/proc/sys/vm/sched_rr_timeslice_ms")
+    if [ $? -eq 0 ]; then
+        echo "sched_rr_timeslice_ms: $f_val"
+    fi
+
+
+    print_section_title "Checking cgroup presence"
+    if grep '^cgroup' <(mount) > /dev/null; then
+        print_notice "Mounted cgroups"
+        grep '^cgroup' <(mount)
+    fi
+
+    print_section_title "Checking governor settings"
+    local nperf_norm nperf_isol nisolcpus_list allcpus_list
+    nperf_norm=()
+    nperf_isol=()
+    allcpus_list=( $(parse_cr_list "$(cat /sys/devices/system/cpu/present)") )
+    nisolcpus_list=( $(array_diff "${allcpus_list[*]}" "${isolcpus_list[*]}") )
+    for i in ${isolcpus_list[@]}; do
+        if [ $(cat /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor) != 'performance' ]; then
+            nperf_isol=( ${nperf_isol[@]} $i )
+        fi
+    done
+    for i in ${nisolcpus_list[@]}; do
+        if [ $(cat /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor) != 'performance' ]; then
+            nperf_norm=( ${nperf_norm[@]} $i )
+        fi
+    done
+    if [ -n "$nperf_norm" ]; then
+        echo -e "$(get_return_message 1): cpus $(echo "${nperf_norm[@]}" | tr ' ' ',') are not set with performance governor"
+    fi
+    if [ -n "$nperf_isol" ]; then
+        echo -e "$(get_return_message 2): cpus $(echo "${nperf_isol[@]}" | tr ' ' ',') are not set with performance governor"
+    fi
+    echo -e "$(get_return_message 1): you have $(lsmod | wc -l) modules loaded, you have to check the behaviour and latencies of them"
+
+
+    print_section_title "Checking interrupt configuration"
+    local irq_list irq_aff_list diff_list i_num
+    irq_list=( $( find /proc/irq -mindepth 1 -maxdepth 1 -type d | tr '\n' ' ' ) )
+    for fol in ${irq_list[@]}; do
+        diff_list=()
+        irq_aff_list=( $(parse_cr_list "$(cat "$fol/smp_affinity_list")") )
+        diff_list=$( array_same "${isolcpus_list[*]}" "${irq_aff_list[*]}" )
+        if [ -n "$diff_list" ]; then
+            diff_list=( $(echo ${diff_list[*]}) )
+            i_num=$(echo "$fol" | sed "s;/proc/irq/;;g")
+            echo -e "$(get_return_message 1): isolated cpus $(echo "${diff_list[@]}" | tr ' ' ',') are registered for irq $i_num"
+        fi
+    done
+    if [ -e "/proc/irq/default_smp_affinity" ]; then
+        echo -e "$(get_return_message 2): default_smp_affinity is present"
+    fi
+}
+
 
 # Main
 
@@ -397,3 +530,4 @@ fi
 check_cmd_line
 parse_isolcpus
 uname_check
+procsys_check
