@@ -47,7 +47,7 @@ print_lineresult_error(){
 # Prints a line with ERROR prepended in red
 print_error(){
     if [ -n "$1" ]; then
-        >&2 echo -e "\e[91m\e[1mError\e[0m: $1"
+        echo -e "\e[91m\e[1mError\e[0m: $1"
     fi
 }
 
