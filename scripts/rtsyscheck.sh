@@ -363,6 +363,32 @@ parse_isolcpus(){
     isolcpus_list=$(parse_cr_list "$(cat /sys/devices/system/cpu/isolated)" )
 }
 
+# check_governors: checks the currently enabled cpu governors for each cpu and
+# reports if any of them don't have the performance governor
+check_governors(){
+    local nperf_norm nperf_isol nisolcpus_list allcpus_list
+    nperf_norm=()
+    nperf_isol=()
+    allcpus_list=( $(parse_cr_list "$(cat /sys/devices/system/cpu/present)") )
+    nisolcpus_list=( $(array_diff "${allcpus_list[*]}" "${isolcpus_list[*]}") )
+    for i in ${isolcpus_list[@]}; do
+        if [ $(cat /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor) != 'performance' ]; then
+            nperf_isol=( ${nperf_isol[@]} $i )
+        fi
+    done
+    for i in ${nisolcpus_list[@]}; do
+        if [ $(cat /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor) != 'performance' ]; then
+            nperf_norm=( ${nperf_norm[@]} $i )
+        fi
+    done
+    if [ -n "$nperf_norm" ]; then
+        echo -e "$(get_return_message 1): cpus $(echo "${nperf_norm[@]}" | tr ' ' ',') are not set with performance governor"
+    fi
+    if [ -n "$nperf_isol" ]; then
+        echo -e "$(get_return_message 2): cpus $(echo "${nperf_isol[@]}" | tr ' ' ',') are not set with performance governor"
+    fi
+}
+
 uname_check(){
     print_section_title "Checking if uname -a is proper"
     local check_msg
@@ -473,26 +499,10 @@ procsys_check(){
     fi
 
     print_section_title "Checking governor settings"
-    local nperf_norm nperf_isol nisolcpus_list allcpus_list
-    nperf_norm=()
-    nperf_isol=()
-    allcpus_list=( $(parse_cr_list "$(cat /sys/devices/system/cpu/present)") )
-    nisolcpus_list=( $(array_diff "${allcpus_list[*]}" "${isolcpus_list[*]}") )
-    for i in ${isolcpus_list[@]}; do
-        if [ $(cat /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor) != 'performance' ]; then
-            nperf_isol=( ${nperf_isol[@]} $i )
-        fi
-    done
-    for i in ${nisolcpus_list[@]}; do
-        if [ $(cat /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor) != 'performance' ]; then
-            nperf_norm=( ${nperf_norm[@]} $i )
-        fi
-    done
-    if [ -n "$nperf_norm" ]; then
-        echo -e "$(get_return_message 1): cpus $(echo "${nperf_norm[@]}" | tr ' ' ',') are not set with performance governor"
-    fi
-    if [ -n "$nperf_isol" ]; then
-        echo -e "$(get_return_message 2): cpus $(echo "${nperf_isol[@]}" | tr ' ' ',') are not set with performance governor"
+    if [ -d "/sys/devices/system/cpu/cpufreq" ]; then
+        check_governors
+    else
+        print_notice "cpufreq not found, skipping governor checks"
     fi
     echo -e "$(get_return_message 1): you have $(lsmod | wc -l) modules loaded, you have to check the behaviour and latencies of them"
 
