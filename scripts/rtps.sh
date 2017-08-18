@@ -29,11 +29,11 @@ get_pid_list(){
 filter_proc_by_class(){
     local proc_class
     for pid in $1; do
-        if [ -z $2 ]; then
+        if [ -z "$2" ]; then
             echo $pid
         else
             proc_class=$(cat /proc/$pid/stat 2>/dev/null | cut -d' ' -f41)
-            if [ "$proc_class" == $2 ]; then
+            if [ "$proc_class" == "$2" ]; then
                 echo $pid
             fi
         fi
