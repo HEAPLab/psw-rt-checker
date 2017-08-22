@@ -3,9 +3,14 @@
 # read_proccgroup: prints out cgroup information given a pid
 # $1: the pid to print
 read_proccgroup(){
-    for line in "$(cat /proc/$1/cgroup)"; do
-        for cont in "$(cut -d':' -f2 <<< """$1""" | tr ',' ' ')"; do
-            echo "$cont: $(get_cgroup_path "$cont" "$(cut -d':' -f3)")"
+    local cpath
+    local line
+    local cont
+    for line in $(tac "/proc/$1/cgroup"); do
+        cpath=$(echo "$line" | cut -d':' -f3)
+        for cont in $(cut -d':' -f2 <<< """$line""" | tr ',' ' '); do
+            cont=$(echo $cont | cut -d'=' -f2)
+            printf '%s: %s\n' $cont $(get_cgroup_path "$cont" "$cpath")
         done
     done
 }
@@ -40,10 +45,33 @@ translate_sched_class(){
     fi
 }
 
+
 # print_bold: prints the string in bold
 # $1: string to print
 print_desc(){
     printf '\033[1m%-25s\033[0m' "$1"
+}
+
+
+# print_cgroups: prints the cgroup information given a pid
+# $1: pid to use
+print_cgroups(){
+    local mounted_cgroups
+    local first_line
+    first_line=0
+    if [ "$(wc -l "/proc/$1/cgroup" 2>/dev/null | cut -d' ' -f1)" -gt 0 ]; then
+        mounted_cgroups=$(read_proccgroup "$1")
+        while read line; do
+            if [ $first_line -eq 0 ]; then
+                print_desc 'Cgroups:'
+                echo "$line"
+                first_line=1
+            else
+                printf "%s" "$(seq -s' ' 26 | tr -d '[:digit:]')"
+                echo "$line"
+            fi
+        done < <(echo "$mounted_cgroups")
+    fi
 }
 
 # print_description: prints the program description given a single pid
@@ -63,7 +91,7 @@ print_description(){
         translate_sched_class $(cut -d' ' -f41 "/proc/$1/stat")
         print_desc "Scheduling Priority:"
         cut -d' ' -f18 "/proc/$1/stat"
-        #print_cgroups is here
+        print_cgroups "$1"
         print_desc "CPUs allowed:"
         grep '^Cpus_allowed_list' "/proc/$1/status" | cut -f2
         print_desc "MEMs allowed:"
