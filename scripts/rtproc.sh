@@ -19,7 +19,7 @@ read_proccgroup(){
 # $1: controller name
 # $2: path read from a line in /proc/[pid]/cgroup
 get_cgroup_path(){
-    echo "/sys/fs/cgroup/$1/$2" | sed 's;/\+;/;g'
+    echo "/sys/fs/cgroup/$1/$2" | sed 's;/\+;/;g' | sed 's;/$;;g'
 }
 
 # translate_sched_class: converts scheduling class id to a human-readable name
@@ -57,8 +57,7 @@ print_desc(){
 # $1: pid to use
 print_cgroups(){
     local mounted_cgroups
-    local first_line
-    first_line=0
+    local first_line=0
     if [ "$(wc -l "/proc/$1/cgroup" 2>/dev/null | cut -d' ' -f1)" -gt 0 ]; then
         mounted_cgroups=$(read_proccgroup "$1")
         while read line; do
@@ -71,6 +70,32 @@ print_cgroups(){
                 echo "$line"
             fi
         done < <(echo "$mounted_cgroups")
+    fi
+}
+
+# print_quotas: prints quotas given a single pid
+# $1: pid of the program
+print_quotas(){
+
+    if [ -e "/proc/$1/cgroup" ]; then
+        local cgroup_path=$(grep -e ',cpu:' -e ',cpu,' -e ':cpu,' "/proc/$1/cgroup" | cut -d':' -f3)
+        cgroup_path=$(get_cgroup_path "$cgroup_path")
+        print_desc 'CFS Quota:'
+        printf '%s/%s\n' "$(cat "$cgroup_path/cpu/cpu.cfs_quota_us")" \
+                         "$(cat "$cgroup_path/cpu/cpu.cfs_period_us")"
+        if [ -e "$cgroup_path/cpu.rt_runtime_us" ]; then
+            print_desc 'RT Quota:'
+            printf '%s/%s\n' "$(cat "$cgroup_path/cpu/cpu.rt_runtime_us")" \
+                             "$(cat "$cgroup_path/cpu/cpu.rt_period_us")"
+        else
+            print_desc 'RT Quota:'
+            printf '%s/%s\n' "$(cat '/proc/sys/kernel/sched_rt_runtime_us')" \
+                             "$(cat '/proc/sys/kernel/sched_rt_period_us')"
+        fi
+    else
+        print_desc 'RT Quota:'
+        printf '%s/%s\n' "$(cat '/proc/sys/kernel/sched_rt_runtime_us')" \
+                         "$(cat '/proc/sys/kernel/sched_rt_period_us')"
     fi
 }
 
@@ -96,7 +121,7 @@ print_description(){
         grep '^Cpus_allowed_list' "/proc/$1/status" | cut -f2
         print_desc "MEMs allowed:"
         grep '^Mems_allowed_list' "/proc/$1/status" | cut -f2
-        #print_quotas is here
+        print_quotas "$1"
         print_desc "Nr. Context switches:"
         printf '%d (%d voluntary, %d involuntary)\n' $(grep '_switches' "/proc/$1/sched" | tr -d ' ' | cut -d':' -f2 | tr '\n' ' ')
         print_desc "Total Memory:"
