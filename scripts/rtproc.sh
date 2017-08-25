@@ -136,7 +136,7 @@ print_description(){
 while getopts ':p:' arg; do
     case $arg in
         p)
-            pid_list="$OPTARG";;
+            pid_list="$(echo "$OPTARG" | tr ',' ' ')";;
     esac
 done
 
