@@ -130,3 +130,27 @@ print_description(){
         grep '^VmLck' "/proc/$1/status" | cut -f2 | sed 's/^ \+//g'
     fi
 }
+
+# Main
+
+while getopts ':p:' arg; do
+    case $arg in
+        p)
+            pid_list="$OPTARG";;
+    esac
+done
+
+if [ -z "$pid_list" ]; then
+    pid_list="$(pidof $1)"
+fi
+
+first_entry=0
+
+for pid in $pid_list; do
+    if [ $first_entry -eq 0 ]; then
+        first_entry=1
+    else
+        seq -s'-' 51 | tr -d '[:digit:]'
+    fi
+    print_description "$pid"
+done
