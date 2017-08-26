@@ -81,8 +81,12 @@ print_quotas(){
         local cgroup_path=$(grep -e ',cpu:' -e ',cpu,' -e ':cpu,' "/proc/$1/cgroup" | cut -d':' -f3)
         cgroup_path=$(get_cgroup_path "$cgroup_path")
         print_desc 'CFS Quota:'
-        printf '%s/%s\n' "$(cat "$cgroup_path/cpu/cpu.cfs_quota_us")" \
-                         "$(cat "$cgroup_path/cpu/cpu.cfs_period_us")"
+        if [ -e "$cgroup_path/cpu/cpu.cfs_quota_us" ]; then
+            printf '%s/%s\n' "$(cat "$cgroup_path/cpu/cpu.cfs_quota_us")" \
+                             "$(cat "$cgroup_path/cpu/cpu.cfs_period_us")"
+        else
+            echo 'N/A'
+        fi
         if [ -e "$cgroup_path/cpu.rt_runtime_us" ]; then
             print_desc 'RT Quota:'
             printf '%s/%s\n' "$(cat "$cgroup_path/cpu/cpu.rt_runtime_us")" \
