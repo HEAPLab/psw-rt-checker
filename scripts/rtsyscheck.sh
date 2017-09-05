@@ -393,6 +393,10 @@ check_governors(){
     nperf_isol=()
     allcpus_list=( $(parse_cr_list "$(cat /sys/devices/system/cpu/present)") )
     nisolcpus_list=( $(array_diff "${allcpus_list[*]}" "${isolcpus_list[*]}") )
+    if [ ! -e '/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor' ]; then
+        print_lineresult 'Cpu scaling information not present, check if cpufreq module is loaded' 1
+        return 0
+    fi
     for i in ${isolcpus_list[@]}; do
         if [ $(cat /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor) != 'performance' ]; then
             nperf_isol=( ${nperf_isol[@]} $i )
