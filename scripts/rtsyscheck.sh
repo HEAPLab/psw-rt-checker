@@ -194,7 +194,7 @@ get_cmdline_var(){
     fi
 }
 
-# parse_cr_list: Parses a comma-range list, echos the resulting array
+# parse_cr_list: Parses a comma-range list, echoes the resulting array
 # $1: the string to parse
 parse_cr_list(){
     local list
@@ -214,6 +214,26 @@ parse_cr_list(){
     echo ${final_list[@]}
 }
 
+# parse_bitmask_list: Parses a cpu bitmask and echoes the array
+# $1: bitmask string
+parse_bitmask_list(){
+    if [ -n "$1" ]; then
+        local fixed_bitmask=$(echo $1 | tr '[:lower:]' '[:upper:]')
+        local bin_bitmask="$(echo "ibase=16; obase=2; $fixed_bitmask" | bc | \
+                             sed 's/\(.\)/\1 /g;s/ $//' | tr ' ' '\n' | tac | \
+                             tr '\n' ' ')"
+        local int=0
+        local ret_string=''
+        for bit in $bin_bitmask; do
+            if [ $bit -eq 1 ]; then
+                ret_string="$ret_string $int"
+            fi
+            (( int++ ))
+        done
+        echo $ret_string
+    fi
+}
+
 # get_file_value: gets the contents of a file and echoes them, returns 1 if
 # the file was not found
 # $1: filepath to check
@@ -231,14 +251,16 @@ get_file_value(){
 # $1: first array
 # $2: second array
 array_diff(){
-    comm -23 <(echo "$1" | tr ' ' '\n' | sort) <(echo "$2" | tr ' ' '\n' | sort) | tr '\n' ' '
+    comm -23 <(echo "$1" | tr ' ' '\n' | sort) <(echo "$2" | tr ' ' '\n' | sort) | \
+             tr '\n' ' ' | sed 's; $;;'
 }
 
 # array_same: returns an array with only the elements that are shared
 # $1: first array
 # $2: second array
 array_same(){
-    comm -12 <(echo "$1" | tr ' ' '\n' | sort) <(echo "$2" | tr ' ' '\n' | sort) | tr '\n' ' '
+    comm -12 <(echo "$1" | tr ' ' '\n' | sort) <(echo "$2" | tr ' ' '\n' | sort) | \
+             tr '\n' ' ' | sed 's; $;;'
 }
 
 
@@ -360,7 +382,7 @@ check_cmd_line(){
 # parse_isolcpus: parses the isolcpus list (through /sys/devices/system/cpu/isolated)
 # and expands ranges. Saves the expanded array into $isolcpus_list.
 parse_isolcpus(){
-    isolcpus_list=$(parse_cr_list "$(cat /sys/devices/system/cpu/isolated)" )
+    isolcpus_list="$(parse_cr_list "$(cat /sys/devices/system/cpu/isolated)" )"
 }
 
 # check_governors: checks the currently enabled cpu governors for each cpu and
@@ -520,9 +542,28 @@ procsys_check(){
             echo -e "$(get_return_message 1): isolated cpus $(echo "${diff_list[@]}" | tr ' ' ',') are registered for irq $i_num"
         fi
     done
+
     if [ -e "/proc/irq/default_smp_affinity" ]; then
-        echo -e "$(get_return_message 2): default_smp_affinity is present"
+        default_smp_list=( $( parse_bitmask_list "$(cat /proc/irq/default_smp_affinity)") )
+        diff_list=$(array_same "${isolcpus_list[*]}" "${default_smp_list[*]}")
+        if [ -n "$diff_list" ]; then
+            echo -e "$(get_return_message 2): isolated cpus $(echo "${diff_list[@]}" | tr ' ' ',') are in default_smp_affinity"
+        fi
     fi
+
+    local wk_list=( $( find /sys/devices/virtual/workqueue -mindepth 1 -maxdepth 1 -type d | tr '\n' ' ' ) )
+    for fol in ${wk_list[@]}; do
+        if [ -e "$fol/cpumask" ]; then
+            diff_list=()
+            wk_aff_list=( $(parse_bitmask_list "$(cat "$fol/cpumask")") )
+            diff_list=$( array_same "${isolcpus_list[*]}" "${wk_aff_list[*]}" )
+            if [ -n "$diff_list" ]; then
+                diff_list=( $(echo ${diff_list[*]}) )
+                wk=$(echo "$fol" | sed "s;/sys/devices/virtual/workqueue/;;g")
+                echo -e "$(get_return_message 2): isolated cpus $(echo "${diff_list[@]}" | tr ' ' ',') are registered for workqueue $wk"
+            fi
+        fi
+    done
 }
 
 
