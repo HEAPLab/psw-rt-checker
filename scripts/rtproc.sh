@@ -129,9 +129,19 @@ print_description(){
         print_desc "Nr. Context switches:"
         printf '%d (%d voluntary, %d involuntary)\n' $(grep '_switches' "/proc/$1/sched" | tr -d ' ' | cut -d':' -f2 | tr '\n' ' ')
         print_desc "Total Memory:"
-        grep '^VmSize' "/proc/$1/status" | cut -f2 | sed 's/^ \+//g'
+        mem_size=$(grep '^VmSize' "/proc/$1/status")
+        if [ -n "$mem_size" ]; then
+            echo "$mem_size" | cut -f2 | sed 's/^ \+//g'
+        else
+            echo 'NA'
+        fi
         print_desc "Locked Memory:"
-        grep '^VmLck' "/proc/$1/status" | cut -f2 | sed 's/^ \+//g'
+        lock_mem_size=$(grep '^VmLck' "/proc/$1/status")
+        if [ -n "$lock_mem_size" ]; then
+            echo "$lock_mem_size" | cut -f2 | sed 's/^ \+//g'
+        else
+            echo 'NA'
+        fi
     fi
 }
 
