@@ -133,14 +133,14 @@ print_description(){
         if [ -n "$mem_size" ]; then
             echo "$mem_size" | cut -f2 | sed 's/^ \+//g'
         else
-            echo 'NA'
+            echo 'N/A'
         fi
         print_desc "Locked Memory:"
         lock_mem_size=$(grep '^VmLck' "/proc/$1/status")
         if [ -n "$lock_mem_size" ]; then
             echo "$lock_mem_size" | cut -f2 | sed 's/^ \+//g'
         else
-            echo 'NA'
+            echo 'N/A'
         fi
     fi
 }
